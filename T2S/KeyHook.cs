@@ -5,7 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace SC2
+namespace SC2BuildTrainer
 {
     class GlobalKeyboardHookEventArgs : HandledEventArgs
     {
