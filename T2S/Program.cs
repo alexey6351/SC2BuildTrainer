@@ -20,6 +20,7 @@ namespace SC2BuildTrainer
 {
     struct BuildOrderItem
     {
+        public string supply;
         public string timing;
         public string text;
     };
@@ -131,7 +132,9 @@ namespace SC2BuildTrainer
                 {
                     if (currentBuildItem < buildOrder.items.Length)
                     {
-                        synthesizer.SpeakAsync(buildOrder.items[currentBuildItem].text);
+                        synthesizer.SpeakAsync(String.Format("{0} {1}",
+                            buildOrder.items[currentBuildItem].supply,
+                            buildOrder.items[currentBuildItem].text));
 
                         Console.WriteLine("[{0:D2}:{1:D2}] {2}",
                             debugWatch.Elapsed.Minutes,
