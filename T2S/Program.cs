@@ -35,9 +35,10 @@ namespace SC2BuildTrainer
     {
         static void Main(string[] args)
         {
-            ExecuteBuildOrder(Rectangle.FromLTRB(1750, 15, 1860, 50));
+            ExecuteBuildOrder(/*Rectangle.FromLTRB(1750, 15, 1860, 50)*/);
         }
 
+#if false
         static bool CopyFromScreen(Rectangle screenRegion, Image image)
         {
             try
@@ -58,8 +59,9 @@ namespace SC2BuildTrainer
                 return false;
             }
         }
+#endif
 
-        static void ExecuteBuildOrder(Rectangle screenRegion)
+        static void ExecuteBuildOrder(/*Rectangle screenRegion*/)
         { 
             using (var synthesizer = new SpeechSynthesizer())
             {
@@ -68,11 +70,13 @@ namespace SC2BuildTrainer
                 synthesizer.Rate = 0; // -10 .. 10
 
                 Timer timer = null;
-                object timerAccessLock = new object();
+                //object timerAccessLock = new object();
                 Stopwatch debugWatch = null;
 
                 BuildOrder buildOrder = Builds.Empty;
                 uint currentBuildItem = 0;
+
+#if false
                 int supply1 = 0, supply2 = 0;
 
                 var SupplyTimerCallbackProc = new TimerCallback(delegate (object state)
@@ -126,7 +130,8 @@ namespace SC2BuildTrainer
                             timer.Change(1000, -1);
                     }
 
-                });
+            });
+#endif
 
                 var BuildOrderTimerCallbackProc = new TimerCallback(delegate (object state)
                 {
@@ -142,64 +147,88 @@ namespace SC2BuildTrainer
                             buildOrder.items[currentBuildItem].text);
 
                         ++currentBuildItem;
-                    }
 
-                    if (currentBuildItem < buildOrder.items.Length)
-                    {
-                        var advance = TimeSpan.FromSeconds(currentBuildItem == 0 ? 1 : 0);
+                        if (currentBuildItem < buildOrder.items.Length)
+                        {
+                            var advance = TimeSpan.FromSeconds(currentBuildItem == 0 ? 1 : 0);
 
-                        timer.Change(
-                            TimeSpan.Parse(buildOrder.items[currentBuildItem].timing) 
-                                - TimeSpan.Parse(buildOrder.items[currentBuildItem - 1].timing) 
-                                - advance, 
-                            Timeout.InfiniteTimeSpan);
+                            timer.Change(
+                                TimeSpan.Parse(buildOrder.items[currentBuildItem].timing)
+                                    - TimeSpan.Parse(buildOrder.items[currentBuildItem - 1].timing)
+                                    - advance,
+                                Timeout.InfiniteTimeSpan);
+                        }
+                        else
+                        {
+                            timer.Change(1000, 30000);
+                        }
+
                     }
                     else
                     {
-                        timer.Dispose();
-                        timer = new Timer(SupplyTimerCallbackProc, null, 0, -1);
+                        synthesizer.SpeakAsync("Supply!");
+                        return;
                     }
-                });
+
+               });
+
+                timer = new Timer(BuildOrderTimerCallbackProc, null, -1, -1);
 
                 using (var keyHook = new GlobalKeyboardHook())
                 {
                     bool running = false;
+                    int myRace = 0;
+                    var races = new int[] { Convert.ToInt32('T'), Convert.ToInt32('Z'), Convert.ToInt32('P'), };
 
-                    var KeyPressCallbackProc = new EventHandler<GlobalKeyboardHookEventArgs>(delegate (object sender, GlobalKeyboardHookEventArgs e)
+                    var KeyPressCallbackProc = new EventHandler<GlobalKeyboardHookEventArgs>(delegate (object sender, GlobalKeyboardHookEventArgs keypressParams)
                     {
-                        var vk = e.KeyboardData.VirtualCode;
+                        if (keypressParams.KeyboardState != GlobalKeyboardHook.KeyboardState.KeyDown)
+                            return;
 
-                        if (!running && 
-                             ( e.KeyboardData.VirtualCode == 'T'
-                             || e.KeyboardData.VirtualCode == 'Z'
-                             || e.KeyboardData.VirtualCode == 'P'))
-                        {
-                            Console.WriteLine("(Re)starting...");
-                            buildOrder = 
-                                e.KeyboardData.VirtualCode == 'T' ? Builds.Terran
-                                    : e.KeyboardData.VirtualCode == 'Z' ? Builds.Zerg
-                                    : e.KeyboardData.VirtualCode == 'P' ? Builds.Protoss
-                                    : Builds.Empty;
+                        var vk = keypressParams.KeyboardData.VirtualCode;
 
-                            currentBuildItem = 0;
-                            timer = new Timer(BuildOrderTimerCallbackProc, null, 0, -1);
-                            debugWatch = Stopwatch.StartNew();
-                            running = true;
-                        }
-                        else if (running && e.KeyboardData.VirtualCode == 0x79) // VK_F10
+                        if (!running)
                         {
-                            lock (timerAccessLock)
+                            if (races.Contains(keypressParams.KeyboardData.VirtualCode))
                             {
-                                timer.Dispose();
-                                timer = null;
+                                if (myRace == 0)
+                                {
+                                    myRace = keypressParams.KeyboardData.VirtualCode;
+                                }
+                                else
+                                {
+                                    switch (String.Format("{0}v{1}", (char)myRace, (char)keypressParams.KeyboardData.VirtualCode))
+                                    {
+                                        case "TvT": buildOrder = Builds.TvT; break;
+                                        case "TvP": buildOrder = Builds.TvP; break;
+                                        case "TvZ": buildOrder = Builds.TvZ; break;
+                                        case "ZvT": buildOrder = Builds.ZvT; break;
+                                        case "ZvP": buildOrder = Builds.ZvP; break;
+                                        case "ZvZ": buildOrder = Builds.ZvZ; break;
+                                        case "PvT": buildOrder = Builds.PvT; break;
+                                        case "PvZ": buildOrder = Builds.PvZ; break;
+                                        case "PvP": buildOrder = Builds.PvP; break;
+                                    }
+
+                                    Console.WriteLine("(Re)starting...");
+                                    currentBuildItem = 0;
+                                    timer.Change(0, -1);
+                                    debugWatch = Stopwatch.StartNew();
+                                    running = true;
+                                }
                             }
+                            else
+                            {
+                                myRace = 0;
+                            }
+                        }
+                        else if (running && keypressParams.KeyboardData.VirtualCode == 0x79) // VK_F10
+                        {
+                            timer.Change(-1, -1);
                             debugWatch.Stop();
                             running = false;
+                            myRace = 0;
                             Console.WriteLine("Stopped.");
-                        }
-                        else
-                        {
-                            return;
                         }
                     });
 
